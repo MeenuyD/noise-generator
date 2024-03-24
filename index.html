@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Worklet Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            margin-top: 50px;
+        }
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 20px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        canvas {
+            display: block;
+            margin: auto;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Audio Worklet Demo</h1>
+    <h5>Noise Generator</h5>
+    <button id="startButton">Start</button>
+    <button id="stopButton">Stop</button>
+    <canvas id="noiseChart" width="400" height="200"></canvas>
+    <script>
+        let context = new AudioContext();
+        let analyser;
+        let dataArray;
+
+        document.getElementById('startButton').addEventListener('click', function() {
+            // Check if the audio context is in suspended state and resume it if needed
+            if (context.state === 'suspended') {
+                context.resume();
+            }
+
+            // Load and register the worklet
+            context.audioWorklet.addModule('worklet.js').then(() => {
+                // Create a user-defined AudioNode
+                let myNoise = new AudioWorkletNode(context, 'noise-generator');
+                // Connect the node to the destination
+                myNoise.connect(context.destination);
+
+                // Create an analyser node to get waveform data
+                analyser = context.createAnalyser();
+                myNoise.connect(analyser);
+                analyser.fftSize = 256;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                // Start drawing noise chart
+                drawNoiseChart();
+            }).catch(error => {
+                console.error('Failed to load worklet:', error);
+            });
+        });
+
+        document.getElementById('stopButton').addEventListener('click', function() {
+            // Stop drawing noise chart
+            cancelAnimationFrame(animationId);
+        });
+
+        let canvas = document.getElementById('noiseChart');
+        let ctx = canvas.getContext('2d');
+        let animationId;
+
+        function drawNoiseChart() {
+            analyser.getByteTimeDomainData(dataArray);
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            let sliceWidth = canvas.width / dataArray.length;
+            let x = 0;
+            for(let i = 0; i < dataArray.length; i++) {
+                let v = dataArray[i] / 128.0;
+                let y = v * canvas.height / 2;
+                if(i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                x += sliceWidth;
+            }
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            animationId = requestAnimationFrame(drawNoiseChart);
+        }
+    </script>
+</body>
+</html>
